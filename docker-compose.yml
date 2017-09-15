@@ -1,0 +1,104 @@
+# Drupal with PostgreSQL
+#
+# Access via "http://localhost:8080"
+#   (or "http://$(docker-machine ip):8080" if using docker-machine)
+#
+# During initial Drupal setup,
+# Database type: PostgreSQL
+# Database name: postgres
+# Database username: postgres
+# Database password: example
+# ADVANCED OPTIONS; Database host: postgres
+
+version: '3.1'
+
+services:
+
+  drupal:
+    image: drupal:8.2-apache
+    ports:
+      - 8080:80
+    volumes:
+      - /var/www/html/modules
+      - /var/www/html/profiles
+      - /var/www/html/themes
+      # this takes advantage of the feature in Docker that a new anonymous
+      # volume (which is what we're creating here) will be initialized with the
+      # existing content of the image at the same location
+      - /var/www/html/sites
+    restart: always
+
+  drupal-postgres:
+    image: postgres:9.6
+    environment:
+      POSTGRES_PASSWORD: example
+    restart: always
+
+
+# ------------------------------------------------------------------------------
+# Ref: https://docs.docker.com/compose/compose-file/
+#
+# Install docker for Mac:
+# https://www.docker.com/products/docker
+#
+# docker-compose -p local_jenkins down
+# docker-compose -p local_jenkins up -d
+# docker-compose -p local_jenkins logs
+#
+# Use the password from the logs output to access the instance.
+# http://localhost:49001/
+# ------------------------------------------------------------------------------
+
+  jenkins:
+    image: "jenkins:latest"
+    ports:
+      - "49001:8080"
+    restart: "always"
+    volumes:
+      - /var/jenkins_home
+
+  gitlab:
+    image: 'gitlab/gitlab-ce:latest'
+    restart: always
+    hostname: 'gitlab.tapirs-technologies.co.uk'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://gitlab.tapirs-technologies.co.uk:49002'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2224
+    ports:
+      - '49002:49002'
+      - '2224:22'
+    volumes:
+      - /etc/gitlab
+      - /var/log/gitlab
+      - /var/opt/gitlab
+
+  kong:
+    image: kong:latest
+    container_name: kong
+    environment:
+      - DATABASE=postgres
+    restart: always
+    ports:
+      - "8000:8000"
+      - "443:8443"
+      - "8001:8001"
+      - "7946:7946"
+      - "7946:7946/udp"
+    links:
+      - kong-postgres
+  kong-ui:
+    image: pgbi/kong-dashboard:latest
+    container_name: kong-dashboard
+    ports:
+      - "49004:8080"
+  kong-postgres:
+    image: postgres:9.4
+    container_name: kong-database
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=kong
+      - POSTGRES_DB=kong
+    volumes:
+      - /var/lib/postgresql/data
